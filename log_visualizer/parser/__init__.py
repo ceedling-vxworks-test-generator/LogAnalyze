@@ -2,10 +2,12 @@
 
 from .log_grammar import LogGrammar, UtLogGrammar
 from .log_parser import LogParser, LogRecordAssembler, PhysicalLineReader
-from .source_dump import DirectorySourceReader, PathFilter, SourceDumpReader
+from .source_dump import EmptySourceRepository, PathFilter, SourceDumpReader
+from .source_tree import DirectorySourceReader, decode_source
 
 __all__ = [
     "DirectorySourceReader",
+    "EmptySourceRepository",
     "LogGrammar",
     "LogParser",
     "LogRecordAssembler",
@@ -13,4 +15,5 @@ __all__ = [
     "PhysicalLineReader",
     "SourceDumpReader",
     "UtLogGrammar",
+    "decode_source",
 ]

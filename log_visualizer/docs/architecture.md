@@ -334,7 +334,19 @@ for B in entries (時刻順・ストリーム):
 
 ---
 
-## 10. 拡張ポイント
+## 10. ソースフォルダ入力と差分キャッシュ（v1.1）
+
+| 項目 | 内容 |
+|---|---|
+| 入力 | `DirectorySourceReader`（parser/source_tree.py）。os.walk で再帰走査し、除外パターンに一致するフォルダは中に入らない。文字コードは UTF-8 → CP932 を自動判定 |
+| 行番号 | 実ファイルを直接読むため、ログの `(file:line func)` と一致する（ダンプ経由のずれが起きない） |
+| clang | ソースフォルダ指定時はその場で解析する（`ClangWorkspace(source_root=...)`）。作業フォルダにはスタブとプレリュードだけを置き、入力の場所ごとに 1 つを使い回す |
+| 差分キャッシュ | `CachedSourceAnalysis` がファイルごとのシグネチャ（フォルダ: サイズ＋更新時刻 / ダンプ: 内容ハッシュ）を保持し、変わったファイルだけを解析する。解析器は `analyze_units()` で解析単位ごとに結果を返し、ヘッダ関数の重複は `merge_analyses()` で統合する。300 件ごとに途中保存する |
+| GUI | `gui.py`: tkinter のダイアログでログ・ソースフォルダ・出力先を選ぶ。`Dialogs` Protocol で抽象化し、テストでは差し替える |
+
+---
+
+## 11. 拡張ポイント
 
 - 別のログ書式: `LogGrammar` Protocol を実装して `LogParser` に渡す。
 - 別の解析器（tree-sitter 等）: `SourceAnalyzer` Protocol を実装して `AnalyzerFactory` に登録。

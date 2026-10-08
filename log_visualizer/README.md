@@ -29,15 +29,42 @@ pip install -r log_visualizer/requirements.txt
 
 ## 実行手順
 
+### ダイアログで選ぶ（おすすめ）
+
+`LogAnalyze/log_visualizer_gui.bat` をダブルクリックします。コマンドから実行する場合は、`python -m log_visualizer` を引数なしで（または `--gui` を付けて）実行します。
+
+エクスプローラーのダイアログが次の順に開きます。
+
+1. **ログファイル**を選択します。
+2. **ソースコードのフォルダ**を選択します。サブフォルダも再帰的に解析します。
+   - キャンセルすると、ソースダンプ（.txt）を選ぶか、ログだけで可視化するかを選べます。
+3. **出力先フォルダ**を選択します。キャンセルすると「ログと同じ場所の `lv_output`」に出力します。
+
+完了するとブラウザで HTML が自動的に開きます。前回選んだ場所は `~/.log_visualizer/last_selection.json` に記録し、次回の初期位置にします。
+
+### コマンドで指定する
+
 ```bash
-# 基本: ログ + ソースダンプ → lv_output/ に出力
+# 実ソースフォルダを指定（推奨: ログの行番号と実ファイルが一致する）
+python -m log_visualizer --log path/to/log.txt --source path/to/project_root --out lv_output
+
+# ソースダンプ（1 ファイルにまとめた形式）も引き続き使える
 python -m log_visualizer --log 参考資料/log.txt --source 参考資料/source_dump.txt --out lv_output
 
-# サンプルで試す
-python -m log_visualizer --log log_visualizer/sample/sample.log --source log_visualizer/sample/sample_source_dump.txt --out lv_sample
+# サンプルで試す（実ソースフォルダ版）
+python -m log_visualizer --log log_visualizer/sample/sample.log --source log_visualizer/sample/sample_src --out lv_sample
 ```
 
-`lv_output/sequence.html` をブラウザで開きます。
+`--log` だけを指定し、ソースと出力先をダイアログで選ぶこともできます（指定しなかった項目だけダイアログが開きます）。
+
+### 大規模なソースフォルダの解析
+
+- **再帰的な走査:** フォルダを再帰的に走査します。除外パターン（テスト・`CMakeFiles` など）に一致するフォルダには入りません。`.git` / `node_modules` / `.venv` などは常にスキップします。
+- **文字コード:** 自動で判定します（UTF-8 → Shift_JIS(CP932) の順）。設定の `source.encoding` で固定もできます。
+- **clang 解析:** ソースをコピーせず、その場で解析します。
+- **差分キャッシュ:** ファイル単位でキャッシュします。2 回目以降は、サイズ・更新時刻が変わったファイルだけを再解析します。300 件ごとに途中保存するので、初回の長い解析を中断しても、次回は続きから再開します。
+- **ヘッダ変更時の注意:** clang 解析でヘッダだけを変更した場合、そのヘッダを include する `.c` は自動では再解析されません。必要なら `--rebuild-cache` で作り直してください。
+- **初回の所要時間の目安:** clang で「翻訳単位（.c/.cpp）数 × 約 0.5 秒 ÷ 並列数」です（実データ約 800 翻訳単位で約 2 分）。数万ファイル規模で初回が長すぎる場合は、`--backend regex`（簡易解析）なら clang の数倍〜十数倍速く終わります。
 
 ### 出力ファイル
 
@@ -56,10 +83,11 @@ python -m log_visualizer --log log_visualizer/sample/sample.log --source log_vis
 
 | オプション | 説明 |
 |---|---|
-| `--source PATH` | ソースダンプ、またはソースのディレクトリ。省略するとログだけで可視化（矢印なし） |
+| `--gui` | ログ・ソースフォルダ・出力先をダイアログで選ぶ（`--log` 省略時も同じ） |
+| `--source PATH` | ソースのフォルダ（再帰解析）またはソースダンプ。省略するとログだけで可視化（矢印なし） |
 | `--backend auto\|clang\|regex` | ソース解析方式（既定 auto: libclang があれば clang） |
 | `--jobs N` | clang 解析の並列数（既定: CPU 数 − 1） |
-| `--no-cache` / `--cache-dir DIR` | 解析キャッシュ（既定 `.lv_cache/`）を使わない / 置き場所を変える |
+| `--no-cache` / `--rebuild-cache` / `--cache-dir DIR` | 解析キャッシュ（既定 `.lv_cache/`）を使わない / 作り直す / 置き場所を変える |
 | `--from` / `--to` | 時刻範囲で事前に絞り込む（`2026-10-07 14:37:15.000` 形式） |
 | `--module NAME` | 指定モジュールのログだけを出力（複数指定可） |
 | `--max-entries N` | 先頭 N 件だけ処理 |
@@ -70,7 +98,7 @@ python -m log_visualizer --log log_visualizer/sample/sample.log --source log_vis
 
 | 処理 | 時間 |
 |---|---|
-| libclang 解析（初回） | 約 2〜6 分（並列。以降はキャッシュで数秒） |
+| libclang 解析（初回） | 約 2 分（並列。変更なしなら約 2 秒、1 ファイル変更なら約 5 秒） |
 | 正規表現解析 | 約 8 秒 |
 | ログ 100 万行の解析〜HTML 出力 | 約 75 秒、Python 側のピークメモリ約 60MB（出力 HTML 約 25MB） |
 
@@ -96,7 +124,7 @@ python -m log_visualizer --log log_visualizer/sample/sample.log --source log_vis
 
 | セクション | 内容 |
 |---|---|
-| `[source]` | ダンプのパス接頭辞の除去、対象拡張子、除外パターン（CMakeFiles・テストコードなど） |
+| `[source]` | 文字コード、ダンプのパス接頭辞の除去、対象拡張子、除外パターン（CMakeFiles・テストコードなど） |
 | `[analyzer]` | 解析方式、並列数、コンパイル引数、`-D` マクロ、キャッシュ先、CallGraph から除外する関数（`ut_log_*` など） |
 | `[[async_apis]]` | 非同期 API の定義。`thread`（エントリ関数の引数位置）、`queue_send` / `queue_receive`（キューの引数位置）、`event_send`（送信先タスクハンドルの引数位置）、`callback_register` を指定 |
 | `[modules]` | モジュール決定ルール。① ログのモジュール欄（`PCL:xxx` → `PCL`）② ファイル名ルール ③ ディレクトリルール、および別名（例: `conversionLayer.*` を 1 レーンにまとめる） |

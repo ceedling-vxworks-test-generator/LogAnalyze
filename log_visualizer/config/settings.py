@@ -29,6 +29,8 @@ class SourceSettings:
     path_prefix_strip: tuple[str, ...] = ("Input/",)
     extensions: tuple[str, ...] = (".c", ".cpp", ".h", ".hpp")
     exclude_patterns: tuple[str, ...] = ()
+    # ソースフォルダ読込み時の文字コード（auto = UTF-8 → CP932 の順に判定）
+    encoding: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,7 @@ def settings_from_dict(data: dict[str, Any]) -> Settings:
             path_prefix_strip=_tuple(source.get("path_prefix_strip")),
             extensions=tuple(e.lower() for e in _tuple(source.get("extensions"))),
             exclude_patterns=_tuple(source.get("exclude_patterns")),
+            encoding=str(source.get("encoding", "auto")),
         ),
         analyzer=AnalyzerSettings(
             backend=str(analyzer.get("backend", "auto")),

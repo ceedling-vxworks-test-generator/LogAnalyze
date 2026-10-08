@@ -5,6 +5,8 @@
 - 使い方: [log_visualizer/README.md](log_visualizer/README.md)
 - 設計書: [log_visualizer/docs/architecture.md](log_visualizer/docs/architecture.md)
 
+Windows では `log_visualizer_gui.bat` をダブルクリックすると、ログファイル・ソースフォルダ・出力先をダイアログで選んで実行できます。
+
 ```bash
 pip install -r log_visualizer/requirements.txt
 python -m log_visualizer --log log_visualizer/sample/sample.log --source log_visualizer/sample/sample_source_dump.txt --out lv_output

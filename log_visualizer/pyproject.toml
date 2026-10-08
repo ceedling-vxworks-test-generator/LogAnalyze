@@ -1,6 +1,6 @@
 [project]
 name = "log_visualizer"
-version = "1.0.0"
+version = "1.1.0"
 description = "大規模 C/C++ プロジェクト向けログ解析・シーケンス図可視化ツール"
 requires-python = ">=3.11"
 

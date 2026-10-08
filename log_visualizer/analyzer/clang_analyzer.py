@@ -1,6 +1,7 @@
 """libclang による C/C++ 解析器。
 
-- ソースダンプを作業ディレクトリへ展開し、ヘッダのあるディレクトリをすべて -I に指定する。
+- ソースフォルダ指定時はその場で解析する（ダンプの場合のみ作業ディレクトリへ展開）。
+  ヘッダのあるディレクトリをすべて -I に指定する。
 - pip 版 libclang は標準ヘッダを持たないため、プロジェクト内で解決できない
   #include に空のスタブを作り、基本型はプレリュード（-include）で与える。
 - 関数定義・呼び出し・関数ポインタ呼び出しは AST から取得し、
@@ -15,7 +16,7 @@ import os
 import re
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Callable, Iterable, Iterator, Optional
 
 from ..config.settings import AsyncApiSpec, Settings
 from ..domain.models import SourceFile
@@ -29,6 +30,7 @@ from .raw_model import (
     RawFileAnalysis,
     RawFunction,
 )
+from ..parser.source_tree import read_source
 from .text_utils import LineIndex, prepare_source
 
 TU_EXTENSIONS_C = (".c",)
@@ -90,11 +92,15 @@ typedef __builtin_va_list va_list;
 
 
 class ClangWorkspace:
-    """libclang 用の作業ディレクトリ（展開済みソース・スタブ・プレリュード）。"""
+    """libclang 用の作業ディレクトリ（スタブ・プレリュード、ダンプ時は展開済みソース）。
 
-    def __init__(self, root: Path) -> None:
+    source_root を指定するとソースはその場所のものを使い、コピーしない。
+    """
+
+    def __init__(self, root: Path, source_root: Optional[Path] = None) -> None:
         self.root = Path(root)
-        self.src = self.root / "src"
+        self.in_place = source_root is not None
+        self.src = Path(source_root) if source_root is not None else self.root / "src"
         self.stubs = self.root / "stubs"
         self.prelude = self.root / "lv_prelude.h"
         self.include_dirs: list[str] = []
@@ -103,9 +109,17 @@ class ClangWorkspace:
     def ready_marker(self) -> Path:
         return self.root / ".ready"
 
-    def prepare(self, files: Iterable[SourceFile]) -> None:
+    def prepare(self, files: Iterable[SourceFile], fingerprint: str = "") -> None:
+        """スタブ・プレリュード・インクルードパスを用意する。
+
+        ソースの fingerprint が前回と同じなら前回の結果を再利用する。
+        """
         include_dirs_file = self.root / "include_dirs.txt"
-        if self.ready_marker.exists() and include_dirs_file.exists():
+        if (
+            self.ready_marker.exists()
+            and include_dirs_file.exists()
+            and self.ready_marker.read_text(encoding="utf-8") == fingerprint
+        ):
             self.include_dirs = include_dirs_file.read_text(encoding="utf-8").splitlines()
             return
         self.root.mkdir(parents=True, exist_ok=True)
@@ -114,8 +128,9 @@ class ClangWorkspace:
         includes: set[str] = set()
         for source in files:
             dest = self.src / source.path
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(source.content, encoding="utf-8", newline="")
+            if not self.in_place:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(source.content, encoding="utf-8", newline="")
             lower = source.path.lower()
             parts = source.path.split("/")
             for i in range(len(parts)):
@@ -135,7 +150,7 @@ class ClangWorkspace:
         self.prelude.write_text(PRELUDE, encoding="utf-8")
         self.include_dirs = sorted(header_dirs)
         include_dirs_file.write_text("\n".join(self.include_dirs), encoding="utf-8")
-        self.ready_marker.write_text("ok", encoding="utf-8")
+        self.ready_marker.write_text(fingerprint, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +161,10 @@ _WORKER: dict[str, Any] = {}
 
 
 def _worker_init(
-    src_root: str, base_args: list[str], specs: list[tuple[str, str, int, Optional[int]]]
+    src_root: str,
+    base_args: list[str],
+    specs: list[tuple[str, str, int, Optional[int]]],
+    encoding: str = "auto",
 ) -> None:
     import clang.cindex as ci
 
@@ -154,6 +172,7 @@ def _worker_init(
     _WORKER["index"] = ci.Index.create()
     _WORKER["src_root"] = os.path.normcase(os.path.abspath(src_root))
     _WORKER["base_args"] = base_args
+    _WORKER["encoding"] = encoding
     rules = AsyncApiRules(
         AsyncApiSpec(name=n, kind=k, arg=a, handle_arg=h) for n, k, a, h in specs
     )
@@ -161,13 +180,12 @@ def _worker_init(
     _WORKER["extractor"] = BodyExtractor(rules)
 
 
-def _worker_parse(job: tuple[str, list[str]]) -> list[dict[str, Any]]:
-    path, lang_args = job
+def _worker_parse(job: tuple[str, str, list[str]]) -> tuple[str, list[dict[str, Any]]]:
+    rel, path, lang_args = job
     try:
-        return [a.to_dict() for a in _ClangTuParser().parse(path, lang_args)]
+        return rel, [a.to_dict() for a in _ClangTuParser().parse(path, lang_args)]
     except Exception as exc:  # 1 ファイルの失敗で全体を止めない
-        rel = os.path.relpath(path, _WORKER["src_root"]).replace(os.sep, "/")
-        return [RawFileAnalysis(path=rel, errors=[f"{type(exc).__name__}: {exc}"]).to_dict()]
+        return rel, [RawFileAnalysis(path=rel, errors=[f"{type(exc).__name__}: {exc}"]).to_dict()]
 
 
 class _ClangTuParser:
@@ -225,7 +243,7 @@ class _ClangTuParser:
     def _text(self, rel: str) -> tuple[str, LineIndex]:
         cached = self.texts.get(rel)
         if cached is None:
-            raw = Path(self.src_root, rel).read_text(encoding="utf-8", errors="replace")
+            raw = read_source(Path(self.src_root, rel), _WORKER["encoding"])
             text = prepare_source(raw)
             cached = (text, LineIndex(text))
             self.texts[rel] = cached
@@ -389,19 +407,33 @@ class ClangSourceAnalyzer:
         self,
         settings: Settings,
         work_dir: Path,
-        all_files: Optional[Iterable[SourceFile]] = None,
+        all_files: Optional[Callable[[], Iterable[SourceFile]]] = None,
+        source_root: Optional[Path] = None,
+        fingerprint: Optional[Callable[[], str]] = None,
     ) -> None:
         self._settings = settings
-        self._workspace = ClangWorkspace(work_dir)
+        self._workspace = ClangWorkspace(work_dir, source_root)
         self._all_files = all_files
+        self._fingerprint = fingerprint
 
-    def analyze_files(self, files: Iterable[SourceFile]) -> Iterator[RawFileAnalysis]:
-        targets = [f.path for f in files]
-        # include 解決には除外ファイルも含めて展開する
-        self._workspace.prepare(self._all_files if self._all_files is not None else [])
-        jobs = self._jobs(targets)
+    def is_unit(self, path: str) -> bool:
+        return path.lower().endswith(TU_EXTENSIONS_C + TU_EXTENSIONS_CXX)
+
+    def analyze_units(
+        self, files: Iterable[SourceFile]
+    ) -> Iterator[tuple[str, list[RawFileAnalysis]]]:
+        """翻訳単位（.c / .cpp）ごとに (パス, [解析結果]) を返す。
+
+        ヘッダ内の関数は複数の翻訳単位に現れるため、重複は merge_analyses で除く。
+        """
+        jobs = self._jobs([f.path for f in files])
         if not jobs:
             return
+        # include 解決用のスタブ生成（除外ファイルも含めて走査）。解析対象がある時だけ行う
+        self._workspace.prepare(
+            self._all_files() if self._all_files is not None else [],
+            self._fingerprint() if self._fingerprint is not None else "",
+        )
         cfg = self._settings.analyzer
         base_args = [
             "--target=x86_64-unknown-linux-gnu",
@@ -416,20 +448,17 @@ class ClangSourceAnalyzer:
         base_args.append(f"-I{self._workspace.stubs}")
         specs = [(s.name, s.kind, s.arg, s.handle_arg) for s in self._settings.async_apis]
         workers = cfg.jobs if cfg.jobs > 0 else max(1, (os.cpu_count() or 2) - 1)
-        seen: set[tuple[str, str, int]] = set()
         with ProcessPoolExecutor(
             max_workers=workers,
             initializer=_worker_init,
-            initargs=(str(self._workspace.src), base_args, specs),
+            initargs=(str(self._workspace.src), base_args, specs, self._settings.source.encoding),
         ) as pool:
-            for results in pool.map(_worker_parse, jobs, chunksize=4):
-                for data in results:
-                    analysis = RawFileAnalysis.from_dict(data)
-                    yield from self._dedupe(analysis, seen)
+            for rel, results in pool.map(_worker_parse, jobs, chunksize=4):
+                yield rel, [RawFileAnalysis.from_dict(d) for d in results]
 
-    def _jobs(self, targets: list[str]) -> list[tuple[str, list[str]]]:
+    def _jobs(self, targets: list[str]) -> list[tuple[str, str, list[str]]]:
         cfg = self._settings.analyzer
-        jobs: list[tuple[str, list[str]]] = []
+        jobs: list[tuple[str, str, list[str]]] = []
         for rel in targets:
             lower = rel.lower()
             if lower.endswith(TU_EXTENSIONS_C):
@@ -438,38 +467,5 @@ class ClangSourceAnalyzer:
                 lang = ["-x", "c++", *cfg.cxx_args]
             else:
                 continue
-            jobs.append((str(self._workspace.src / rel), lang))
+            jobs.append((rel, str(self._workspace.src / rel), lang))
         return jobs
-
-    @staticmethod
-    def _dedupe(
-        analysis: RawFileAnalysis, seen: set[tuple[str, str, int]]
-    ) -> Iterator[RawFileAnalysis]:
-        """ヘッダ内の関数は複数の翻訳単位で現れるため重複を除く。"""
-        keep: list[int] = []
-        for i, fn in enumerate(analysis.functions):
-            key = (analysis.path, fn.name, fn.start_line)
-            if key in seen:
-                continue
-            seen.add(key)
-            keep.append(i)
-        if len(keep) == len(analysis.functions):
-            yield analysis
-            return
-        remap = {old: new for new, old in enumerate(keep)}
-        filtered = RawFileAnalysis(path=analysis.path, errors=analysis.errors)
-        filtered.functions = [analysis.functions[i] for i in keep]
-        filtered.calls = [c for c in analysis.calls if c.caller in remap]
-        for c in filtered.calls:
-            c.caller = remap[c.caller]
-        filtered.async_calls = [a for a in analysis.async_calls if a.caller in remap]
-        for a in filtered.async_calls:
-            a.caller = remap[a.caller]
-        filtered.refs = [
-            r for r in analysis.refs if r.caller is None or r.caller in remap
-        ]
-        for r in filtered.refs:
-            if r.caller is not None:
-                r.caller = remap[r.caller]
-        if filtered.functions or filtered.refs or filtered.errors:
-            yield filtered

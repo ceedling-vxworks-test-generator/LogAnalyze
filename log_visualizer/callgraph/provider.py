@@ -30,16 +30,18 @@ class SourceCallGraphProvider:
         repository: SourceRepository,
         backend: Optional[str] = None,
         use_cache: bool = True,
+        rebuild_cache: bool = False,
     ) -> None:
         self._settings = settings
         self._repository = repository
         self._backend = backend
         self._use_cache = use_cache
+        self._rebuild_cache = rebuild_cache
         self.result: Optional[CallGraphResult] = None
 
     def build_callgraph(self) -> CallGraph:
         backend, raws = CachedSourceAnalysis(self._settings, self._repository).load(
-            self._backend, self._use_cache
+            self._backend, self._use_cache, self._rebuild_cache
         )
         builder = CallGraphBuilder(
             ModuleResolver(self._settings.modules), self._settings.analyzer.exclude_callees

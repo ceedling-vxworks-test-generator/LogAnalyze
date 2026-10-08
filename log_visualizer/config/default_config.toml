@@ -6,7 +6,9 @@ encoding = "utf-8"
 errors = "replace"
 
 [source]
-# ダンプ内パスの先頭から除去するプレフィックス
+# ソースフォルダの文字コード。auto = UTF-8 → CP932(Shift_JIS) の順に判定
+encoding = "auto"
+# ダンプ内パスの先頭から除去するプレフィックス（ソースフォルダ指定時は使わない）
 path_prefix_strip = ["Input/"]
 # 解析対象の拡張子
 extensions = [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"]

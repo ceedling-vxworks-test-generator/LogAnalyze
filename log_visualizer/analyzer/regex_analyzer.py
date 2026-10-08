@@ -197,8 +197,14 @@ class RegexSourceAnalyzer:
         self._settings = settings
         self._parser = RegexFileParser(AsyncApiRules(settings.async_apis))
 
-    def analyze_files(self, files: Iterable[SourceFile]) -> Iterator[RawFileAnalysis]:
+    def is_unit(self, path: str) -> bool:
+        return path.lower().endswith(SOURCE_EXTENSIONS)
+
+    def analyze_units(
+        self, files: Iterable[SourceFile]
+    ) -> Iterator[tuple[str, list[RawFileAnalysis]]]:
+        """ファイル単位で (パス, [解析結果]) を返す。"""
         for source in files:
             if not source.path.lower().endswith(SOURCE_EXTENSIONS):
                 continue
-            yield self._parser.analyze(source)
+            yield source.path, [self._parser.analyze(source)]

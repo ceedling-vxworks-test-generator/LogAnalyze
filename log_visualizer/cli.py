@@ -6,6 +6,7 @@ import argparse
 import dataclasses
 import logging
 import sys
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence
@@ -21,7 +22,8 @@ from .config.settings import Settings, load_settings
 from .domain.models import CallGraph
 from .domain.ports import CallGraphProvider, SourceRepository
 from .parser.log_parser import LogParser
-from .parser.source_dump import DirectorySourceReader, EmptySourceRepository, SourceDumpReader
+from .parser.source_dump import EmptySourceRepository, SourceDumpReader
+from .parser.source_tree import DirectorySourceReader
 from .renderer.html_renderer import HtmlRenderer
 
 LOG = logging.getLogger("log_visualizer")
@@ -41,18 +43,29 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m log_visualizer",
         description="ログとソースコードを解析し、実行フローをシーケンス図（単一 HTML）で可視化する。",
     )
-    p.add_argument("--log", required=True, type=Path, help="ログファイル（例: log.txt）")
+    p.add_argument("--log", type=Path, help="ログファイル（例: log.txt）。省略するとダイアログで選択")
     p.add_argument(
         "--source",
         type=Path,
-        help="ソースダンプ（source_dump.txt）またはソースのディレクトリ。省略時はログのみで可視化",
+        help="ソースのフォルダ（サブフォルダも再帰的に解析）またはソースダンプ（.txt）。"
+        "省略時はログのみで可視化",
     )
-    p.add_argument("--out", type=Path, default=Path("lv_output"), help="出力ディレクトリ（既定: lv_output）")
+    p.add_argument("--out", type=Path, help="出力ディレクトリ（既定: lv_output）")
+    p.add_argument(
+        "--gui",
+        action="store_true",
+        help="ログ・ソースフォルダ・出力先をエクスプローラーのダイアログで選ぶ（--log 省略時も同様）",
+    )
     p.add_argument("--html", default="sequence.html", help="HTML ファイル名（既定: sequence.html）")
     p.add_argument("--config", type=Path, help="設定ファイル（TOML）。既定設定を上書きする")
     p.add_argument("--backend", choices=["auto", "clang", "regex"], help="ソース解析方式（既定: 設定値 auto）")
     p.add_argument("--jobs", type=int, help="clang 解析の並列数")
-    p.add_argument("--no-cache", action="store_true", help="解析キャッシュを使わない")
+    p.add_argument("--no-cache", action="store_true", help="解析キャッシュを使わない（読み書きしない）")
+    p.add_argument(
+        "--rebuild-cache",
+        action="store_true",
+        help="解析キャッシュを作り直す（ヘッダだけを変更した場合などに使う）",
+    )
     p.add_argument("--cache-dir", type=Path, help="キャッシュディレクトリ（既定: .lv_cache）")
     p.add_argument("--embed-sources", choices=["logged", "all", "none"], help="ソースビューアに埋め込むソース")
     p.add_argument("--title", help="HTML のタイトル")
@@ -94,6 +107,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
+    use_gui = args.gui or args.log is None
+    dialogs = None
+    if use_gui:
+        from .gui import TkDialogs, select_inputs
+
+        try:
+            dialogs = TkDialogs()
+        except Exception as exc:  # GUI が使えない環境（SSH 等）
+            LOG.error("ダイアログを表示できません（%s）。--log を指定してください。", exc)
+            return 2
+        selection = select_inputs(dialogs, args.log, args.source, args.out)
+        if selection is None:
+            LOG.info("ログファイルが選択されなかったため終了します")
+            return 0
+        args.log, args.source, args.out = selection.log, selection.source, selection.out
+        LOG.info("ログ: %s", args.log)
+        LOG.info("ソース: %s", args.source or "（なし）")
+        LOG.info("出力先: %s", args.out)
+    if args.out is None:
+        args.out = Path("lv_output")
+
+    code = _run(args)
+    if dialogs is not None:
+        html = args.out / args.html
+        if code == 0:
+            webbrowser.open(html.resolve().as_uri())
+            dialogs.info("完了", f"出力しました:\n{html.resolve()}")
+        else:
+            dialogs.error("失敗", "処理に失敗しました。コンソールのメッセージを確認してください。")
+    return code
+
+
+def _run(args: argparse.Namespace) -> int:
     if not args.log.exists():
         LOG.error("ログファイルがありません: %s", args.log)
         return 2
@@ -107,7 +153,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.source is None:
         provider = EmptyCallGraphProvider()
     else:
-        provider = SourceCallGraphProvider(settings, repository, use_cache=not args.no_cache)
+        provider = SourceCallGraphProvider(
+            settings, repository, use_cache=not args.no_cache, rebuild_cache=args.rebuild_cache
+        )
     modules = ModuleResolver(settings.modules)
 
     def sequence_factory(graph: CallGraph) -> SequenceBuilder:

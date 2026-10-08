@@ -77,6 +77,21 @@ class SourceDumpReader:
                 digest.update(chunk)
         return digest.hexdigest()[:24]
 
+    def location(self) -> str:
+        """キャッシュを区別するための入力の場所。"""
+        return str(self._path.resolve())
+
+    def local_root(self) -> Optional[Path]:
+        """ディスク上のソースルート（ダンプなので None）。"""
+        return None
+
+    def signatures(self) -> dict[str, str]:
+        """解析対象ファイルごとの内容ハッシュ（差分キャッシュ用）。"""
+        return {
+            f.path: hashlib.sha1(f.content.encode("utf-8")).hexdigest()
+            for f in self.iter_files()
+        }
+
     def iter_files(self) -> Iterator[SourceFile]:
         """除外パターンを適用したファイルを順に返す。"""
         for source in self.iter_all():
@@ -152,6 +167,15 @@ class EmptySourceRepository:
     def fingerprint(self) -> str:
         return "empty"
 
+    def location(self) -> str:
+        return "empty"
+
+    def local_root(self) -> Optional[Path]:
+        return None
+
+    def signatures(self) -> dict[str, str]:
+        return {}
+
     def iter_files(self) -> Iterator[SourceFile]:
         return iter(())
 
@@ -160,39 +184,3 @@ class EmptySourceRepository:
 
     def iter_selected(self, paths: Iterable[str]) -> Iterator[SourceFile]:
         return iter(())
-
-
-class DirectorySourceReader:
-    """ディレクトリ上のソースツリーを読む（ダンプ以外の入力用）。"""
-
-    def __init__(self, root: Path, settings: SourceSettings) -> None:
-        self._root = Path(root)
-        self._filter = PathFilter(settings)
-
-    def fingerprint(self) -> str:
-        digest = hashlib.sha256()
-        for file in sorted(self._root.rglob("*")):
-            if file.is_file():
-                stat = file.stat()
-                digest.update(f"{file}:{stat.st_size}:{stat.st_mtime_ns}".encode())
-        return digest.hexdigest()[:24]
-
-    def iter_files(self) -> Iterator[SourceFile]:
-        for source in self.iter_all():
-            if self._filter.accepts(source.path):
-                yield source
-
-    def iter_selected(self, paths: Iterable[str]) -> Iterator[SourceFile]:
-        for source in self.iter_all(set(paths)):
-            yield source
-
-    def iter_all(self, only: Optional[set[str]] = None) -> Iterator[SourceFile]:
-        for file in sorted(self._root.rglob("*")):
-            if not file.is_file():
-                continue
-            rel = self._filter.normalize(file.relative_to(self._root).as_posix())
-            if only is not None and rel not in only:
-                continue
-            if only is None and not self._filter.accepts(rel):
-                continue
-            yield SourceFile(rel, file.read_text(encoding="utf-8", errors="replace"))

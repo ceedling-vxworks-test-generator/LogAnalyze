@@ -8,7 +8,7 @@ JSON に変換できる単純なデータのみで構成する（キャッシュ
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 # RawCall.kind
 CALL_DIRECT = "direct"  # foo(...)
@@ -77,3 +77,49 @@ class RawFileAnalysis:
             refs=[RawFunctionRef(**r) for r in data.get("refs", [])],
             errors=list(data.get("errors", [])),
         )
+
+
+def merge_analyses(items: Iterable[RawFileAnalysis]) -> list[RawFileAnalysis]:
+    """同じパスの解析結果を 1 つにまとめる。
+
+    clang ではヘッダ内の関数が複数の翻訳単位から報告されるため、
+    (関数名, 開始行) が同じ関数は 1 つにし、呼び出し等の添字を付け替える。
+    """
+    merged: dict[str, RawFileAnalysis] = {}
+    keys: dict[str, dict[tuple[str, int], int]] = {}
+    for item in items:
+        target = merged.get(item.path)
+        if target is None:
+            target = RawFileAnalysis(path=item.path)
+            merged[item.path] = target
+            keys[item.path] = {}
+        index_of = keys[item.path]
+        remap: dict[int, int] = {}
+        new_functions: set[int] = set()
+        for old, fn in enumerate(item.functions):
+            key = (fn.name, fn.start_line)
+            idx = index_of.get(key)
+            if idx is None:
+                idx = len(target.functions)
+                index_of[key] = idx
+                target.functions.append(fn)
+                new_functions.add(idx)
+            remap[old] = idx
+        # 既出の関数（別の翻訳単位で報告済み）の呼び出し等は重複になるので取り込まない
+        for c in item.calls:
+            if remap.get(c.caller) in new_functions:
+                target.calls.append(RawCall(remap[c.caller], c.name, c.line, c.kind))
+        for a in item.async_calls:
+            if remap.get(a.caller) in new_functions:
+                target.async_calls.append(
+                    RawAsyncCall(remap[a.caller], a.api, a.kind, a.line, a.target, a.key, a.handle)
+                )
+        for r in item.refs:
+            if r.caller is None:
+                target.refs.append(r)
+            elif remap.get(r.caller) in new_functions:
+                target.refs.append(
+                    RawFunctionRef(remap[r.caller], r.name, r.line, r.field_name, r.via_call)
+                )
+        target.errors.extend(item.errors)
+    return list(merged.values())

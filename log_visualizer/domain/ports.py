@@ -22,6 +22,18 @@ class SourceRepository(Protocol):
         """内容のハッシュ（キャッシュキー用）。"""
         ...
 
+    def location(self) -> str:
+        """入力の場所（ダンプファイルまたはソースフォルダの絶対パス）。"""
+        ...
+
+    def local_root(self) -> Optional[Path]:
+        """ディスク上のソースルート。ダンプなど実ファイルがない場合は None。"""
+        ...
+
+    def signatures(self) -> dict[str, str]:
+        """解析対象ファイルごとの変更検知用シグネチャ（差分キャッシュ用）。"""
+        ...
+
     def iter_files(self) -> Iterator[SourceFile]:
         """解析対象（除外パターン適用後）のファイル。"""
         ...

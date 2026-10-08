@@ -40,8 +40,14 @@ def sample_dump() -> Path:
     return SAMPLE_DIR / "sample_source_dump.txt"
 
 
+@pytest.fixture(scope="session")
+def sample_src() -> Path:
+    """サンプルの実ソースフォルダ（sample.log の行番号と一致する）。"""
+    return SAMPLE_DIR / "sample_src"
+
+
 def analyze_regex(settings: Settings, files: Iterable[SourceFile]) -> list[RawFileAnalysis]:
-    return list(RegexSourceAnalyzer(settings).analyze_files(files))
+    return [r for _, rs in RegexSourceAnalyzer(settings).analyze_units(files) for r in rs]
 
 
 def build_graph(settings: Settings, files: Iterable[SourceFile]) -> CallGraph:
