@@ -1,0 +1,20 @@
+[project]
+name = "log_visualizer"
+version = "1.0.0"
+description = "大規模 C/C++ プロジェクト向けログ解析・シーケンス図可視化ツール"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = false
+exclude = ["sample/", "ui/"]
+
+[[tool.mypy.overrides]]
+module = ["clang", "clang.*"]
+ignore_missing_imports = true

@@ -1,0 +1,49 @@
+[2026-10-07 14:37:06.100] =================================
+[2026-10-07 14:37:06.100]  Application Starting (sample)
+[2026-10-07 14:37:06.100] =================================
+[2026-10-07 14:37:06.894] [0] INFO  JobManager              task manager initialized (task_manager.c:78 task_manager_init)
+[2026-10-07 14:37:06.894] [0] INFO  PCL:init                ingress initialized (ingress_task1.c:66 ingress_init)
+[2026-10-07 14:37:14.245] [0] INFO  PCL:API request Start   api=submit begin product_request_id=1 (ingress_api.c:16 ExternalRequestIngressSubmit)
+[2026-10-07 14:37:14.245] [0] INFO  PCL:API request End     api=submit end api_result=0 product_request_id=1 (ingress_api.c:23 ExternalRequestIngressSubmit)
+[2026-10-07 14:37:14.260] [0] INFO  PCL:EVENT-TASK1         Dispatching event of type 1 (ingress_task1.c:44 ingress_task1_main)
+[2026-10-07 14:37:14.260] [0] INFO  PCL:handle_submit()     task1=submit begin product_request_id=1 (ingress_task1.c:24 handle_submit)
+[2026-10-07 14:37:14.260] [0] INFO  JobManager              create task=1 request=1 (task_manager.c:66 create_task)
+[2026-10-07 14:37:14.276] [0] INFO  JobManager              execute task=1 (task_manager.c:54 execute_task)
+[2026-10-07 14:37:14.276] [0] INFO  PCL:handle_submit()     task1=submit task2 queued generation_id=1 (ingress_task1.c:31 handle_submit)
+[2026-10-07 14:37:14.291] [0] INFO  JobManager              worker started task=1 (task_manager.c:46 task_worker)
+[2026-10-07 14:37:14.291] [0] INFO  JobManager              process job task=1 type=1 (task_manager.c:35 process_job)
+[2026-10-07 14:37:14.291] [0] INFO  JobManager              print handler task=1 (task_manager.c:23 handler_print)
+[2026-10-07 14:37:14.307] [0] INFO  PCL:completion          completion generation_id=1 execution_result=0 (ingress_task1.c:51 on_task_done)
+[2026-10-07 14:37:14.307] [0] INFO  EIF                     notify completion task=1 (eif_notify.c:32 eif_notify_completion)
+[2026-10-07 14:37:14.307] [0] INFO  RIM                     *****************pipeline status updated pipeline=0 busy=0 [RimUpdateStatus(17)]
+[2026-10-07 14:37:14.307]  (rim_adapter.c:17 RimUpdateStatus)
+[2026-10-07 14:37:14.307] *****************Adapter to store DataID=4[Dispatch(12)]
+[2026-10-07 14:37:14.322] [0] INFO  EIF                     event handled events=0x1 task=1 -> websocket (eif_notify.c:16 eif_handle_event)
+[2026-10-07 14:37:15.281] [0] INFO  PCL:API request Start   api=submit begin product_request_id=5 (ingress_api.c:16 ExternalRequestIngressSubmit)
+[2026-10-07 14:37:15.281] [0] INFO  PCL:API request End     api=submit end api_result=0 product_request_id=5 (ingress_api.c:23 ExternalRequestIngressSu*****************Adapter to store DataID=7[Dispatch(12)]
+[2026-10-07 14:37:15.296] bmit)
+[2026-10-07 14:37:15.296] [0] INFO  PCL:EVENT-TASK1         Dispatching event of type 1 (ingress_task1.c:44 ingress_task1_main)
+[2026-10-07 14:37:15.296] [0] INFO  PCL:handle_submit()     task1=submit begin product_request_id=5 (ingress_task1.c:24 handle_submit)
+[2026-10-07 14:37:15.296] [0] INFO  JobManager              create task=2 request=5 (task_manager.c:66 create_task)
+[2026-10-07 14:37:15.312] [0] INFO  JobManager              execute task=2 (task_manager.c:54 execute_task)
+[2026-10-07 14:37:15.312] [0] INFO  PCL:handle_submit()     task1=submit task2 queued generation_id=2 (ingress_task1.c:31 handle_submit)
+[2026-10-07 14:37:15.328] [0] INFO  JobManager              worker started task=2 (task_manager.c:46 task_worker)
+[2026-10-07 14:37:15.328] [0] INFO  JobManager              process job task=2 type=1 (task_manager.c:35 process_job)
+[2026-10-07 14:37:15.328] [0] INFO  JobManager              maintenance handler task=2 (task_manager.c:28 handler_maintenance)
+[2026-10-07 14:37:15.343] [0] INFO  PCL:completion          completion generation_id=2 execution_result=0 (ingress_task1.c:51 on_task_done)
+[2026-10-07 14:37:15.343] [0] INFO  EIF                     notify completion task=2 (eif_notify.c:32 eif_notify_completion)
+[2026-10-07 14:37:15.343] [0] INFO  RIM                     *****************pipeline status updated pipeline=0 busy=0 [RimUpdateStatus(17)]
+[2026-10-07 14:37:15.343]  (rim_adapter.c:17 RimUpdateStatus)
+[2026-10-07 14:37:15.343] *****************Adapter to store DataID=4[Dispatch(12)]
+[2026-10-07 14:37:15.359] [0] INFO  EIF                     event handled events=0x1 task=2 -> websocket (eif_notify.c:16 eif_handle_event)
+[2026-10-07 14:37:16.010] [0] INFO  PCL:API request Start   api=submit begin product_request_id=6 (ingress_api.c:16 ExternalRequestIngressSubmit)
+[2026-10-07 14:37:16.010] [0] INFO  PCL:API request End     api=submit end api_result=0 product_request_id=6 (ingress_api.c:23 ExternalRequestIngressSubmit)
+[2026-10-07 14:37:16.025] [0] INFO  PCL:EVENT-TASK1         Dispatching event of type 1 (ingress_task1.c:44 ingress_task1_main)
+[2026-10-07 14:37:16.025] [0] INFO  PCL:handle_submit()     task1=submit begin product_request_id=6 (ingress_task1.c:24 handle_submit)
+[2026-10-07 14:37:16.025] [0] INFO  JobManager              create task=3 request=6 (task_manager.c:66 create_task)
+[2026-10-07 14:37:16.041] [0] INFO  JobManager              execute task=3 (task_manager.c:54 execute_task)
+[2026-10-07 14:37:16.041] [0] ERROR JobManager              pthread_create failed task=3 (task_manager.c:57 execute_task)
+[2026-10-07 14:37:16.041] [0] INFO  PCL:handle_submit()     task1=submit task2 queued generation_id=3 (ingress_task1.c:31 handle_submit)
+[2026-10-07 14:37:16.057] [0] WARN  PCL:completion          completion failed generation_id=3 code=5 (ingress_task1.c:57 on_task_error)
+[2026-10-07 14:37:17.000] thread '<unnamed>' (538) panicked at src/server.rs:164:29:
+[2026-10-07 14:37:17.000] failed to bind 0.0.0.0:8000

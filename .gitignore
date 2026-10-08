@@ -1,0 +1,14 @@
+# 参考資料（実ログ・ソースダンプ）はコミットしない
+参考資料/
+
+# 実データでの出力・解析キャッシュ
+lv_output/
+.lv_cache/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.tmp

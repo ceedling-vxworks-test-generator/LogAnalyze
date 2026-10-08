@@ -1,0 +1,6 @@
+MIT License
+
+Copyright (c) 2023 Michael Daines
+
+Viz.js 3.11.0 (https://github.com/mdaines/viz-js) is distributed under the MIT License.
+It bundles Graphviz (EPL-1.0) and Expat (MIT) in object code form.

@@ -1,0 +1,153 @@
+# log_visualizer 既定設定
+# 変更したい場合はこのファイルを複製して --config で指定する（指定した項目だけ上書きされる）。
+
+[log]
+encoding = "utf-8"
+errors = "replace"
+
+[source]
+# ダンプ内パスの先頭から除去するプレフィックス
+path_prefix_strip = ["Input/"]
+# 解析対象の拡張子
+extensions = [".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"]
+# 除外パターン（fnmatch, "/" 区切りパス, 大文字小文字を区別しない）
+exclude_patterns = [
+    "*/CMakeFiles/*",
+    "build/*",
+    "*/test/*",
+    "*/tests/*",
+    "*/unittest/*",
+    "*/unit_test/*",
+    "*/ut/*",
+    "*/mock/*",
+    "*/mocks/*",
+    "*/stub/*",
+    "*/stubs/*",
+    "*/test_*.c",
+    "*/test_*.cpp",
+    "*_test.c",
+    "*_test.cpp",
+]
+
+[analyzer]
+# auto: libclang があれば clang、なければ regex / clang / regex
+backend = "auto"
+# 並列数（0 = CPU 数）
+jobs = 0
+c_args = ["-std=gnu11"]
+cxx_args = ["-std=gnu++17"]
+defines = []
+# 解析結果キャッシュ（ダンプ内容と設定のハッシュで管理）
+cache_dir = ".lv_cache"
+# CallGraph から除外する呼び出し先（fnmatch。ログ出力関数などのノイズ除去）
+exclude_callees = ["ut_log_*", "UT_LOG_*"]
+
+# ---------------------------------------------------------------------------
+# 非同期 API
+#   kind = "thread"         : arg = エントリ関数の引数位置, handle_arg = タスクハンドル引数位置
+#   kind = "event_send"     : arg = 送信先タスクハンドルの引数位置
+#   kind = "queue_send"     : arg = キューの引数位置
+#   kind = "queue_receive"  : arg = キューの引数位置
+#   kind = "callback_register": arg = 登録するコールバック関数の引数位置
+# 引数位置は 0 起点。
+# ---------------------------------------------------------------------------
+[[async_apis]]
+name = "OsTaskCreate"
+kind = "thread"
+arg = 1
+handle_arg = 0
+
+[[async_apis]]
+name = "pthread_create"
+kind = "thread"
+arg = 2
+handle_arg = 0
+
+[[async_apis]]
+name = "std::thread"
+kind = "thread"
+arg = 0
+
+[[async_apis]]
+name = "xTaskCreate"
+kind = "thread"
+arg = 0
+handle_arg = 5
+
+[[async_apis]]
+name = "osThreadNew"
+kind = "thread"
+arg = 0
+
+[[async_apis]]
+name = "OsEventSend"
+kind = "event_send"
+arg = 0
+
+[[async_apis]]
+name = "OsMsgQSend"
+kind = "queue_send"
+arg = 0
+
+[[async_apis]]
+name = "OsMsgQReceive"
+kind = "queue_receive"
+arg = 0
+
+[[async_apis]]
+name = "mq_send"
+kind = "queue_send"
+arg = 0
+
+[[async_apis]]
+name = "mq_receive"
+kind = "queue_receive"
+arg = 0
+
+[[async_apis]]
+name = "xQueueSend"
+kind = "queue_send"
+arg = 0
+
+[[async_apis]]
+name = "xQueueReceive"
+kind = "queue_receive"
+arg = 0
+
+[modules]
+# ① ログのモジュール欄: 区切り文字より前を採用（"PCL:handle_submit()" → "PCL"）
+prefix_separators = [":"]
+# ログのモジュール名を書き換える別名（正規表現 → モジュール名）。先頭から順に評価。
+# 例: conversionLayer.* を 1 レーンにまとめる
+# [[modules.aliases]]
+# pattern = "^conversionLayer\\."
+# module = "conversionLayer"
+aliases = []
+# ② ファイル名ルール（fnmatch → モジュール名）
+file_rules = []
+# ③ ディレクトリルール（正規表現。グループ 1 をモジュール名とする）。先頭から順に評価。
+#    どれにも該当しない場合は親ディレクトリ名を使う。
+directory_rules = [
+    "^src/[^/]+/pipelines/([^/]+)/",
+    "^src/[^/]+/([^/]+)/",
+    "^src/([^/]+)/[^/]+$",
+    "^libs/([^/]+)/",
+]
+# どれにも該当しない RAW ログのレーン名
+raw_lane = "(other)"
+# 関数もモジュールも不明なログのレーン名
+unknown_lane = "(unknown)"
+
+[sequence]
+# 呼び出し元を探す CallGraph 上の最大ホップ数
+max_caller_hops = 3
+# 呼び出し元ログとの最大時間差（ミリ秒）
+sync_window_ms = 1000
+async_window_ms = 10000
+callback_window_ms = 10000
+
+[render]
+# ソースビューアに埋め込むソース: "logged"（ログに出現したファイル）/ "all" / "none"
+embed_sources = "logged"
+# ログ 1 件あたりの最大メッセージ長（超過分は切り捨て）
+max_message_length = 4000

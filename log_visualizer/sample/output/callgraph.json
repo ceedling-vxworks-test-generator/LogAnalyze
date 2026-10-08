@@ -1,0 +1,44 @@
+{
+  "eif_notify.c::eif_init": [
+    "eif_notify.c::eif_task_main"
+  ],
+  "eif_notify.c::eif_notify_completion": [
+    "eif_notify.c::eif_task_main"
+  ],
+  "eif_notify.c::eif_task_main": [
+    "eif_notify.c::eif_handle_event"
+  ],
+  "ingress_api.c::ExternalRequestIngressSubmit": [
+    "ingress_task1.c::ingress_task1_main"
+  ],
+  "ingress_task1.c::handle_submit": [
+    "task_manager.c::create_task"
+  ],
+  "ingress_task1.c::ingress_init": [
+    "ingress_task1.c::ingress_task1_main",
+    "task_manager.c::task_manager_register"
+  ],
+  "ingress_task1.c::ingress_task1_main": [
+    "ingress_task1.c::handle_submit"
+  ],
+  "ingress_task1.c::on_task_done": [
+    "eif_notify.c::eif_notify_completion"
+  ],
+  "rim_adapter.c::RimUpdateStatus": [
+    "rim_adapter.c::Dispatch"
+  ],
+  "task_manager.c::create_task": [
+    "task_manager.c::execute_task"
+  ],
+  "task_manager.c::execute_task": [
+    "task_manager.c::task_worker"
+  ],
+  "task_manager.c::process_job": [
+    "UNRESOLVED_FUNCTION_POINTER",
+    "ingress_task1.c::on_task_done",
+    "task_manager.c::lookup_handler"
+  ],
+  "task_manager.c::task_worker": [
+    "task_manager.c::process_job"
+  ]
+}

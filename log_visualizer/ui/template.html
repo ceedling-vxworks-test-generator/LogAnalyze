@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__LV_TITLE__</title>
+<style>/*__LV_CSS__*/</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span id="lv-title">__LV_TITLE__</span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="seq" role="tab">シーケンス図</button>
+    <button class="tab" data-tab="graph" role="tab">CallGraph</button>
+  </nav>
+  <div id="lv-summary" class="summary"></div>
+</header>
+
+<main id="view-seq" class="layout">
+  <aside id="filters" class="panel">
+    <section class="group">
+      <div class="group-head">
+        <h3>モジュール</h3>
+        <span class="mini-actions"><button data-all="lane">全</button><button data-none="lane">無</button></span>
+      </div>
+      <input id="lane-search" type="search" placeholder="モジュールを絞り込み">
+      <div id="lane-list" class="check-list"></div>
+    </section>
+    <section class="group">
+      <h3>関数</h3>
+      <input id="func-filter" type="search" placeholder="関数名（部分一致）">
+    </section>
+    <section class="group" id="thread-group" hidden>
+      <div class="group-head">
+        <h3>thread_id</h3>
+        <span class="mini-actions"><button data-all="thread">全</button><button data-none="thread">無</button></span>
+      </div>
+      <div id="thread-list" class="check-list short"></div>
+    </section>
+    <section class="group">
+      <h3>ログレベル</h3>
+      <div id="level-list" class="check-list short"></div>
+    </section>
+    <section class="group">
+      <h3>ログ種別</h3>
+      <div id="kind-list" class="check-list short"></div>
+    </section>
+    <section class="group">
+      <h3>時刻範囲</h3>
+      <label class="field">開始<input id="ts-from" type="text" placeholder="HH:MM:SS.mmm"></label>
+      <label class="field">終了<input id="ts-to" type="text" placeholder="HH:MM:SS.mmm"></label>
+      <div class="row-buttons">
+        <button id="ts-from-sel" title="選択中のログを開始時刻にする">選択→開始</button>
+        <button id="ts-to-sel" title="選択中のログを終了時刻にする">選択→終了</button>
+        <button id="ts-clear">クリア</button>
+      </div>
+    </section>
+    <section class="group">
+      <button id="reset-filters" class="wide">フィルタをリセット</button>
+      <button id="expand-all" class="wide">折り畳みをすべて展開</button>
+    </section>
+  </aside>
+
+  <section id="center">
+    <div class="toolbar">
+      <div class="search">
+        <select id="search-mode" aria-label="検索対象">
+          <option value="all">全文</option>
+          <option value="func">関数名</option>
+          <option value="msg">メッセージ</option>
+        </select>
+        <input id="search-text" type="search" placeholder="検索（Enterで次へ）">
+        <button id="search-prev" title="前へ">▲</button>
+        <button id="search-next" title="次へ">▼</button>
+        <span id="search-count" class="muted"></span>
+        <label class="toggle"><input id="search-only" type="checkbox">一致のみ表示</label>
+      </div>
+      <div class="view-controls">
+        <label class="toggle" title="ログ間の時間差を縦方向の間隔に反映"><input id="time-gap" type="checkbox">時間間隔</label>
+        <label class="toggle" title="レーン幅">幅<input id="lane-width" type="range" min="120" max="360" step="10" value="200"></label>
+        <button id="zoom-out" title="縮小">−</button>
+        <span id="zoom-label" class="muted">100%</span>
+        <button id="zoom-in" title="拡大">＋</button>
+        <button id="zoom-reset" title="倍率を戻す">1:1</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="ln solid"></i>同期呼び出し</span>
+      <span><i class="ln dotted"></i>非同期通知</span>
+      <span><i class="ln dashed"></i>コールバック</span>
+      <span class="muted">ホイール: 拡大縮小 / Shift+ホイール・ドラッグ: スクロール / ▾: 折り畳み</span>
+      <span id="visible-count" class="muted right"></span>
+    </div>
+    <div id="seq-wrap">
+      <div id="seq-scroll"><div id="seq-spacer"></div></div>
+      <canvas id="seq-canvas"></canvas>
+    </div>
+  </section>
+
+  <aside id="detail" class="panel">
+    <div id="detail-body" class="detail-empty">ログを選択すると詳細を表示します。</div>
+    <div id="source-viewer" hidden>
+      <div class="source-head">
+        <span id="source-title"></span>
+        <button id="source-close" title="閉じる">×</button>
+      </div>
+      <div id="source-body"></div>
+    </div>
+  </aside>
+</main>
+
+<main id="view-graph" class="layout graph-layout" hidden>
+  <aside class="panel">
+    <section class="group">
+      <h3>関数</h3>
+      <input id="graph-func" type="search" list="graph-func-list" placeholder="関数名 / 関数ID">
+      <datalist id="graph-func-list"></datalist>
+      <div id="graph-func-matches" class="match-list"></div>
+    </section>
+    <section class="group">
+      <h3>表示範囲</h3>
+      <label class="field">方向
+        <select id="graph-dir">
+          <option value="both">呼び出し元＋呼び出し先</option>
+          <option value="callers">呼び出し元</option>
+          <option value="callees">呼び出し先</option>
+        </select>
+      </label>
+      <label class="field">ホップ数
+        <select id="graph-hops">
+          <option>1</option><option selected>2</option><option>3</option><option>4</option>
+        </select>
+      </label>
+      <label class="field">最大ノード数<input id="graph-max" type="number" min="10" max="2000" value="150"></label>
+      <label class="toggle"><input id="graph-logged" type="checkbox">ログに出現した関数を強調</label>
+    </section>
+    <section class="group">
+      <h3>凡例</h3>
+      <div class="legend vertical">
+        <span><i class="ln solid"></i>同期呼び出し</span>
+        <span><i class="ln dotted"></i>非同期通知</span>
+        <span><i class="ln dashed"></i>コールバック</span>
+      </div>
+    </section>
+    <section class="group">
+      <div id="graph-stats" class="muted"></div>
+    </section>
+  </aside>
+  <section id="graph-center">
+    <div id="graph-canvas"><div class="detail-empty">左で関数を選ぶと、その周辺の CallGraph を Graphviz で描画します。</div></div>
+  </section>
+  <aside class="panel">
+    <div id="graph-info"></div>
+    <div class="group">
+      <div class="group-head"><h3>DOT（Graphviz）</h3><button id="dot-copy">コピー</button></div>
+      <textarea id="dot-text" readonly spellcheck="false"></textarea>
+    </div>
+  </aside>
+</main>
+
+<div id="loading"><div class="spinner"></div><div id="loading-text">データを展開しています…</div></div>
+
+<script id="lv-payload" type="application/octet-stream">__LV_PAYLOAD__</script>
+<script>/*__LV_VIZ__*/</script>
+<script>/*__LV_APP__*/</script>
+</body>
+</html>

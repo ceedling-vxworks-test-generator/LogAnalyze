@@ -1,0 +1,413 @@
+===== FILE BEGIN =====
+Path: Input\src\eif\eif_notify.c
+===== CONTENT BEGIN =====
+/**
+ * @file eif_notify.c
+ * @brief 外部 I/F（EIF）への完了通知（サンプル）
+ */
+#include "os_api.h"
+#include "utility_log.h"
+#include "eif_notify.h"
+
+#define EIF_EV_DONE 0x0001u
+
+static os_task_t s_eif_task;
+static volatile int s_last_task_id;
+
+static void eif_handle_event(uint32_t events)
+{
+    UT_LOG_INFO("EIF", "event handled events=0x%x task=%d -> websocket", events, s_last_task_id);
+}
+
+static void eif_task_main(void *arg)
+{
+    (void)arg;
+    for (;;)
+    {
+        uint32_t events = OsEventReceive(EIF_EV_DONE, OS_WAIT_FOREVER);
+        eif_handle_event(events);
+    }
+}
+
+void eif_notify_completion(int task_id)
+{
+    s_last_task_id = task_id;
+    UT_LOG_INFO("EIF", "notify completion task=%d", task_id);
+    (void)OsEventSend(s_eif_task, EIF_EV_DONE);
+}
+
+void eif_init(void)
+{
+    OsTaskAttr attr = { 20, 4096 };
+    (void)OsTaskCreate(&s_eif_task, eif_task_main, &attr);
+}
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\eif\eif_notify.h
+===== CONTENT BEGIN =====
+/**
+ * @file eif_notify.h
+ */
+#ifndef EIF_NOTIFY_H
+#define EIF_NOTIFY_H
+
+void eif_init(void);
+void eif_notify_completion(int task_id);
+
+#endif /* EIF_NOTIFY_H */
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\include\os_api.h
+===== CONTENT BEGIN =====
+/**
+ * @file os_api.h
+ * @brief OS 抽象化レイヤ（サンプル）
+ */
+#ifndef OS_API_H
+#define OS_API_H
+
+#include <stdint.h>
+
+typedef void *MSG_Q_ID;
+typedef uint32_t os_task_t;
+typedef void (*OS_TASKFUNC)(void *arg);
+typedef struct { int priority; int stack_size; } OsTaskAttr;
+typedef unsigned long pthread_t;
+
+#define OS_WAIT_FOREVER 0xFFFFFFFFu
+#define OS_NO_WAIT 0u
+
+extern MSG_Q_ID OsMsgQCreate(int maxMsgs, int maxMsgLength, int options);
+extern int OsMsgQSend(MSG_Q_ID queueId, void *buffer, unsigned int nBytes, unsigned int timeout, int priority);
+extern int OsMsgQReceive(MSG_Q_ID queueId, void *buffer, unsigned int maxNBytes, unsigned int timeout);
+extern int OsTaskCreate(os_task_t *taskid, OS_TASKFUNC func, OsTaskAttr *attr);
+extern uint32_t OsEventSend(os_task_t task, uint32_t event);
+extern uint32_t OsEventReceive(uint32_t events, uint32_t timeout);
+extern int pthread_create(pthread_t *thread, const void *attr, void *(*start)(void *), void *arg);
+
+#endif /* OS_API_H */
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\include\task_manager.h
+===== CONTENT BEGIN =====
+/**
+ * @file task_manager.h
+ * @brief JobManager の公開 API（サンプル）
+ */
+#ifndef TASK_MANAGER_H
+#define TASK_MANAGER_H
+
+typedef struct Task {
+    int id;
+    int type;
+} Task;
+
+/** 完了通知コールバック群 */
+typedef struct TaskCallbacks {
+    void (*on_done)(int task_id);
+    void (*on_error)(int task_id, int code);
+} TaskCallbacks;
+
+typedef void (*TaskHandler)(Task *task);
+
+void task_manager_init(void);
+void task_manager_register(const TaskCallbacks *callbacks);
+int create_task(int request_id, int type);
+
+#endif /* TASK_MANAGER_H */
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\include\utility_log.h
+===== CONTENT BEGIN =====
+/**
+ * @file utility_log.h
+ * @brief ログ出力マクロ（サンプル）
+ *
+ * 出力書式: [%llu] %-5s %-23s %s (%s:%u %s)
+ */
+#ifndef UTILITY_LOG_H
+#define UTILITY_LOG_H
+
+#include <stdint.h>
+
+typedef enum { UT_LOG_LEVEL_TRACE, UT_LOG_LEVEL_DEBUG, UT_LOG_LEVEL_INFO, UT_LOG_LEVEL_WARN, UT_LOG_LEVEL_ERROR } ut_log_level_t;
+
+int ut_log_write_default(ut_log_level_t level, const char *module, const char *file,
+                         uint32_t line, const char *func, const char *fmt, ...);
+
+#define UT_LOG_INFO(module, ...) \
+    (void)ut_log_write_default(UT_LOG_LEVEL_INFO, (module), __FILE__, (uint32_t)__LINE__, __func__, __VA_ARGS__)
+#define UT_LOG_WARN(module, ...) \
+    (void)ut_log_write_default(UT_LOG_LEVEL_WARN, (module), __FILE__, (uint32_t)__LINE__, __func__, __VA_ARGS__)
+#define UT_LOG_ERROR(module, ...) \
+    (void)ut_log_write_default(UT_LOG_LEVEL_ERROR, (module), __FILE__, (uint32_t)__LINE__, __func__, __VA_ARGS__)
+
+#endif /* UTILITY_LOG_H */
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\ingress\ingress_api.c
+===== CONTENT BEGIN =====
+/**
+ * @file ingress_api.c
+ * @brief 外部要求の受付 API（サンプル）
+ */
+#include "os_api.h"
+#include "utility_log.h"
+#include "ingress_internal.h"
+
+IngressContext s_ingress;
+
+int ExternalRequestIngressSubmit(int request_id)
+{
+    Request req;
+    req.id = request_id;
+    req.type = 1;
+    UT_LOG_INFO("PCL:API request Start", "api=submit begin product_request_id=%d", request_id);
+
+    if (OsMsgQSend(s_ingress.requestQueue, &req, sizeof(req), OS_NO_WAIT, 0) != 0)
+    {
+        UT_LOG_ERROR("PCL:API request End", "api=submit queue full product_request_id=%d", request_id);
+        return -1;
+    }
+    UT_LOG_INFO("PCL:API request End", "api=submit end api_result=0 product_request_id=%d", request_id);
+    return 0;
+}
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\ingress\ingress_internal.h
+===== CONTENT BEGIN =====
+/**
+ * @file ingress_internal.h
+ */
+#ifndef INGRESS_INTERNAL_H
+#define INGRESS_INTERNAL_H
+
+#include "os_api.h"
+
+typedef struct Request {
+    int id;
+    int type;
+} Request;
+
+typedef struct IngressContext {
+    MSG_Q_ID requestQueue;
+    os_task_t task1;
+} IngressContext;
+
+extern IngressContext s_ingress;
+
+int ExternalRequestIngressSubmit(int request_id);
+void ingress_init(void);
+
+#endif /* INGRESS_INTERNAL_H */
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\ingress\ingress_task1.c
+===== CONTENT BEGIN =====
+/**
+ * @file ingress_task1.c
+ * @brief 要求受付タスク（サンプル）
+ */
+#include "os_api.h"
+#include "utility_log.h"
+#include "ingress_internal.h"
+#include "task_manager.h"
+#include "eif_notify.h"
+
+static void on_task_done(int task_id);
+static void on_task_error(int task_id, int code);
+
+/* コールバック登録（指示付き初期化子） */
+static const TaskCallbacks k_callbacks = {
+    .on_done = on_task_done,
+    .on_error = on_task_error,
+};
+
+static void handle_submit(const Request *req)
+{
+    int generation_id;
+
+    UT_LOG_INFO("PCL:handle_submit()", "task1=submit begin product_request_id=%d", req->id);
+    generation_id = create_task(req->id, req->type);
+    if (generation_id < 0)
+    {
+        UT_LOG_ERROR("PCL:handle_submit()", "task1=submit create_task failed product_request_id=%d", req->id);
+        return;
+    }
+    UT_LOG_INFO("PCL:handle_submit()", "task1=submit task2 queued generation_id=%d", generation_id);
+}
+
+static void ingress_task1_main(void *arg)
+{
+    Request req;
+    (void)arg;
+    for (;;)
+    {
+        if (OsMsgQReceive(s_ingress.requestQueue, &req, sizeof(req), OS_WAIT_FOREVER) != 0)
+        {
+            continue;
+        }
+        UT_LOG_INFO("PCL:EVENT-TASK1", "Dispatching event of type %d", req.type);
+        handle_submit(&req);
+    }
+}
+
+static void on_task_done(int task_id)
+{
+    UT_LOG_INFO("PCL:completion", "completion generation_id=%d execution_result=0", task_id);
+    eif_notify_completion(task_id);
+}
+
+static void on_task_error(int task_id, int code)
+{
+    UT_LOG_WARN("PCL:completion", "completion failed generation_id=%d code=%d", task_id, code);
+}
+
+void ingress_init(void)
+{
+    OsTaskAttr attr = { 10, 4096 };
+    s_ingress.requestQueue = OsMsgQCreate(16, sizeof(Request), 0);
+    task_manager_register(&k_callbacks);
+    (void)OsTaskCreate(&s_ingress.task1, ingress_task1_main, &attr);
+    UT_LOG_INFO("PCL:init", "ingress initialized");
+}
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\ingress\test\test_ingress.c
+===== CONTENT BEGIN =====
+/* テストコード（既定設定では解析対象から除外される） */
+#include "ingress_internal.h"
+
+void test_submit(void)
+{
+    (void)ExternalRequestIngressSubmit(99);
+}
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\job\task_manager.c
+===== CONTENT BEGIN =====
+/**
+ * @file task_manager.c
+ * @brief JobManager: タスク生成と実行（サンプル）
+ */
+#include "os_api.h"
+#include "utility_log.h"
+#include "task_manager.h"
+
+static const TaskCallbacks *s_callbacks;
+static Task s_tasks[8];
+static int s_next_generation = 1;
+
+static void handler_print(Task *task);
+static void handler_maintenance(Task *task);
+
+static TaskHandler lookup_handler(int type)
+{
+    return type == 1 ? handler_print : handler_maintenance;
+}
+
+static void handler_print(Task *task)
+{
+    UT_LOG_INFO("JobManager", "print handler task=%d", task->id);
+}
+
+static void handler_maintenance(Task *task)
+{
+    UT_LOG_INFO("JobManager", "maintenance handler task=%d", task->id);
+}
+
+static void process_job(Task *task)
+{
+    TaskHandler handler = lookup_handler(task->type);
+
+    UT_LOG_INFO("JobManager", "process job task=%d type=%d", task->id, task->type);
+    (*handler)(task);
+    if (s_callbacks != 0)
+    {
+        s_callbacks->on_done(task->id);
+    }
+}
+
+static void *task_worker(void *arg)
+{
+    Task *task = (Task *)arg;
+    UT_LOG_INFO("JobManager", "worker started task=%d", task->id);
+    process_job(task);
+    return 0;
+}
+
+static void execute_task(Task *task)
+{
+    pthread_t thread;
+    UT_LOG_INFO("JobManager", "execute task=%d", task->id);
+    if (pthread_create(&thread, 0, task_worker, task) != 0)
+    {
+        UT_LOG_ERROR("JobManager", "pthread_create failed task=%d", task->id);
+    }
+}
+
+int create_task(int request_id, int type)
+{
+    Task *task = &s_tasks[s_next_generation % 8];
+    task->id = s_next_generation++;
+    task->type = type;
+    UT_LOG_INFO("JobManager", "create task=%d request=%d", task->id, request_id);
+    execute_task(task);
+    return task->id;
+}
+
+void task_manager_register(const TaskCallbacks *callbacks)
+{
+    s_callbacks = callbacks;
+}
+
+void task_manager_init(void)
+{
+    UT_LOG_INFO("JobManager", "task manager initialized");
+}
+===== CONTENT END =====
+===== FILE END =====
+
+===== FILE BEGIN =====
+Path: Input\src\rim\rim_adapter.c
+===== CONTENT BEGIN =====
+/**
+ * @file rim_adapter.c
+ * @brief RIM アダプタ（printf 形式のトレースを出す例）
+ */
+#include <stdio.h>
+#include "utility_log.h"
+
+#define RIM_TRACE(fmt, ...) printf("*****************" fmt "[%s(%d)]\n", ##__VA_ARGS__, __func__, __LINE__)
+
+void Dispatch(int data_id)
+{
+    RIM_TRACE("Adapter to store DataID=%d", data_id);
+}
+
+void RimUpdateStatus(int pipeline, int busy)
+{
+    UT_LOG_INFO("RIM", "pipeline status updated pipeline=%d busy=%d", pipeline, busy);
+    Dispatch(4);
+}
+===== CONTENT END =====
+===== FILE END =====
+

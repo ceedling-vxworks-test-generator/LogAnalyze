@@ -1,0 +1,52 @@
+digraph callgraph {
+  rankdir=LR;
+  graph [fontname="Helvetica", fontsize=10, bgcolor="transparent"];
+  node [shape=box, style="rounded,filled", fillcolor="#f8fafc", fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=8];
+  subgraph cluster_0 {
+    label="eif"; style=dashed; color="#94a3b8";
+    "eif_notify.c::eif_handle_event" [label="eif_handle_event", tooltip="eif_notify.c::eif_handle_event"];
+    "eif_notify.c::eif_init" [label="eif_init", tooltip="eif_notify.c::eif_init"];
+    "eif_notify.c::eif_notify_completion" [label="eif_notify_completion", tooltip="eif_notify.c::eif_notify_completion"];
+    "eif_notify.c::eif_task_main" [label="eif_task_main", tooltip="eif_notify.c::eif_task_main"];
+  }
+  subgraph cluster_1 {
+    label="ingress"; style=dashed; color="#94a3b8";
+    "ingress_api.c::ExternalRequestIngressSubmit" [label="ExternalRequestIngressSubmit", tooltip="ingress_api.c::ExternalRequestIngressSubmit"];
+    "ingress_task1.c::handle_submit" [label="handle_submit", tooltip="ingress_task1.c::handle_submit"];
+    "ingress_task1.c::ingress_init" [label="ingress_init", tooltip="ingress_task1.c::ingress_init"];
+    "ingress_task1.c::ingress_task1_main" [label="ingress_task1_main", tooltip="ingress_task1.c::ingress_task1_main"];
+    "ingress_task1.c::on_task_done" [label="on_task_done", tooltip="ingress_task1.c::on_task_done"];
+  }
+  subgraph cluster_2 {
+    label="job"; style=dashed; color="#94a3b8";
+    "task_manager.c::create_task" [label="create_task", tooltip="task_manager.c::create_task"];
+    "task_manager.c::execute_task" [label="execute_task", tooltip="task_manager.c::execute_task"];
+    "task_manager.c::lookup_handler" [label="lookup_handler", tooltip="task_manager.c::lookup_handler"];
+    "task_manager.c::process_job" [label="process_job", tooltip="task_manager.c::process_job"];
+    "task_manager.c::task_manager_register" [label="task_manager_register", tooltip="task_manager.c::task_manager_register"];
+    "task_manager.c::task_worker" [label="task_worker", tooltip="task_manager.c::task_worker"];
+  }
+  subgraph cluster_3 {
+    label="rim"; style=dashed; color="#94a3b8";
+    "rim_adapter.c::Dispatch" [label="Dispatch", tooltip="rim_adapter.c::Dispatch"];
+    "rim_adapter.c::RimUpdateStatus" [label="RimUpdateStatus", tooltip="rim_adapter.c::RimUpdateStatus"];
+  }
+  "UNRESOLVED_FUNCTION_POINTER" [label="UNRESOLVED\nFUNCTION_POINTER", shape=octagon, fillcolor="#fee2e2"];
+  "eif_notify.c::eif_init" -> "eif_notify.c::eif_task_main" [style=dotted, color="#0f766e", tooltip="OsTaskCreate"];
+  "ingress_task1.c::ingress_init" -> "ingress_task1.c::ingress_task1_main" [style=dotted, color="#0f766e", tooltip="OsTaskCreate"];
+  "ingress_task1.c::ingress_init" -> "task_manager.c::task_manager_register" [style=solid, color="#334155"];
+  "task_manager.c::execute_task" -> "task_manager.c::task_worker" [style=dotted, color="#0f766e", tooltip="pthread_create"];
+  "eif_notify.c::eif_task_main" -> "eif_notify.c::eif_handle_event" [style=solid, color="#334155"];
+  "ingress_task1.c::handle_submit" -> "task_manager.c::create_task" [style=solid, color="#334155"];
+  "ingress_task1.c::ingress_task1_main" -> "ingress_task1.c::handle_submit" [style=solid, color="#334155"];
+  "ingress_task1.c::on_task_done" -> "eif_notify.c::eif_notify_completion" [style=solid, color="#334155"];
+  "task_manager.c::process_job" -> "task_manager.c::lookup_handler" [style=solid, color="#334155"];
+  "task_manager.c::process_job" -> "UNRESOLVED_FUNCTION_POINTER" [style=solid, color="#334155", tooltip="pointer:handler"];
+  "task_manager.c::process_job" -> "ingress_task1.c::on_task_done" [style=dashed, color="#b45309", tooltip="field:on_done"];
+  "task_manager.c::task_worker" -> "task_manager.c::process_job" [style=solid, color="#334155"];
+  "task_manager.c::create_task" -> "task_manager.c::execute_task" [style=solid, color="#334155"];
+  "rim_adapter.c::RimUpdateStatus" -> "rim_adapter.c::Dispatch" [style=solid, color="#334155"];
+  "eif_notify.c::eif_notify_completion" -> "eif_notify.c::eif_task_main" [style=dotted, color="#0f766e", tooltip="OsEventSend:s_eif_task"];
+  "ingress_api.c::ExternalRequestIngressSubmit" -> "ingress_task1.c::ingress_task1_main" [style=dotted, color="#0f766e", tooltip="OsMsgQSend:requestQueue"];
+}
